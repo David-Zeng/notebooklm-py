@@ -199,9 +199,23 @@ Authenticate with Google NotebookLM via browser.
 
 ```bash
 notebooklm login
+
+# Load a Chrome extension during login (e.g. for corporate Endpoint Verification)
+notebooklm login --extension callobklhcbilhphinckomhgkigmfocg
+
+# Use your real Chrome browser profile (Chrome must be fully quit first)
+notebooklm login --use-chrome-profile
 ```
 
 Opens a Chromium browser with a persistent profile. Log in to your Google account, then press Enter in the terminal to save the session.
+
+**Options:**
+
+| Option | Description |
+| --- | --- |
+| `--storage PATH` | Override where to save auth (default: `~/.notebooklm/storage_state.json`) |
+| `--extension ID_OR_PATH` | Load a Chrome extension. Pass a Chrome Web Store extension ID to auto-download and cache it, or a path to an already-unpacked extension directory containing `manifest.json`. |
+| `--use-chrome-profile` | Use your real Chrome browser profile. Chrome must be fully quit first. Useful when extensions are already installed in your real browser. |
 
 ### Session: `use`
 

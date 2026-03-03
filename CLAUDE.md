@@ -24,6 +24,12 @@ source .venv/bin/activate
 # Run all tests (excluding e2e by default)
 pytest
 
+# Run a single test file
+pytest tests/unit/test_decoder.py
+
+# Run a single test by name
+pytest tests/unit/test_decoder.py::TestClass::test_method
+
 # Run with coverage
 pytest --cov
 
@@ -39,21 +45,6 @@ notebooklm --help
 **IMPORTANT:** Always run these checks before committing to avoid CI failures:
 
 ```bash
-# Format code with ruff
-ruff format src/ tests/
-
-# Check for linting issues
-ruff check src/ tests/
-
-# Type checking with mypy
-mypy src/notebooklm --ignore-missing-imports
-
-# Run tests
-pytest
-```
-
-Or use this one-liner:
-```bash
 ruff format src/ tests/ && ruff check src/ tests/ && mypy src/notebooklm --ignore-missing-imports && pytest
 ```
 
@@ -61,7 +52,7 @@ ruff format src/ tests/ && ruff check src/ tests/ && mypy src/notebooklm --ignor
 
 ### Layered Design
 
-```
+```text
 CLI Layer (cli/)
     ↓
 Client Layer (client.py, _*.py APIs)
@@ -92,25 +83,31 @@ RPC Layer (rpc/)
 ### Key Files
 
 | File | Purpose |
-|------|---------|
+| --- | --- |
 | `client.py` | Main `NotebookLMClient` class |
 | `_core.py` | HTTP and RPC infrastructure |
 | `_notebooks.py` | `client.notebooks` API |
 | `_sources.py` | `client.sources` API |
 | `_artifacts.py` | `client.artifacts` API |
 | `_chat.py` | `client.chat` API |
+| `_settings.py` | `client.settings` API (output language, etc.) |
+| `_sharing.py` | `client.sharing` API |
+| `_research.py` | `client.research` API |
+| `_notes.py` | `client.notes` API |
 | `rpc/types.py` | RPC method IDs (source of truth) |
 | `auth.py` | Authentication handling |
 | `cli/` | CLI command modules |
 
 ### Repository Structure
 
-```
+```text
 src/notebooklm/
 ├── __init__.py          # Public exports
 ├── client.py            # NotebookLMClient
 ├── auth.py              # Authentication
 ├── types.py             # Dataclasses
+├── exceptions.py        # Exception types
+├── paths.py             # Storage paths
 ├── _core.py             # Core infrastructure
 ├── _notebooks.py        # NotebooksAPI
 ├── _sources.py          # SourcesAPI
@@ -118,21 +115,33 @@ src/notebooklm/
 ├── _chat.py             # ChatAPI
 ├── _research.py         # ResearchAPI
 ├── _notes.py            # NotesAPI
+├── _settings.py         # SettingsAPI
+├── _sharing.py          # SharingAPI
+├── _url_utils.py        # URL helpers
+├── _logging.py          # Logging setup
+├── _version_check.py    # Python version guard
 ├── rpc/                 # RPC protocol layer
 │   ├── types.py         # Method IDs and enums
 │   ├── encoder.py       # Request encoding
 │   └── decoder.py       # Response parsing
 └── cli/                 # CLI implementation
-    ├── __init__.py
-    ├── helpers.py       # Shared utilities
-    ├── session.py       # login, use, status, clear
-    ├── notebook.py      # list, create, delete, rename
-    ├── source.py        # source add, list, delete
-    ├── artifact.py      # artifact commands
-    ├── generate.py      # generate audio, video, etc.
-    ├── download.py      # download commands
-    ├── chat.py          # ask, configure, history
-    └── note.py          # note commands
+    ├── helpers.py        # Shared utilities
+    ├── options.py        # Shared Click options
+    ├── grouped.py        # Command group wrappers
+    ├── error_handler.py  # CLI error handling
+    ├── session.py        # login, use, status, clear
+    ├── notebook.py       # list, create, delete, rename
+    ├── source.py         # source add, list, delete
+    ├── artifact.py       # artifact commands
+    ├── generate.py       # generate audio, video, etc.
+    ├── download.py       # download commands
+    ├── download_helpers.py # download utilities
+    ├── chat.py           # ask, configure, history
+    ├── note.py           # note commands
+    ├── research.py       # research commands
+    ├── share.py          # share commands
+    ├── skill.py          # skill commands
+    └── language.py       # language commands
 ```
 
 ## API Patterns
@@ -151,13 +160,14 @@ async with await NotebookLMClient.from_storage() as client:
 ### CLI Structure
 
 Commands are organized as:
+
 - **Top-level**: `login`, `use`, `status`, `clear`, `list`, `create`, `ask`
 - **Grouped**: `source add`, `artifact list`, `generate audio`, `download video`, `note create`
 
 ## Testing Strategy
 
 - **Unit tests** (`tests/unit/`): Test encoding/decoding, no network
-- **Integration tests** (`tests/integration/`): Mock HTTP responses
+- **Integration tests** (`tests/integration/`): Mock HTTP responses via VCR cassettes (`tests/cassettes/`)
 - **E2E tests** (`tests/e2e/`): Real API, require auth, marked `@pytest.mark.e2e`
 
 ### E2E Test Status
@@ -178,6 +188,7 @@ Commands are organized as:
 ## Documentation
 
 All docs use lowercase-kebab naming in `docs/`:
+
 - `docs/cli-reference.md` - CLI commands
 - `docs/python-api.md` - Python API reference
 - `docs/configuration.md` - Storage and settings
@@ -185,6 +196,28 @@ All docs use lowercase-kebab naming in `docs/`:
 - `docs/development.md` - Architecture, testing, releasing
 - `docs/rpc-development.md` - RPC capture and debugging
 - `docs/rpc-reference.md` - RPC payload structures
+
+## AI Agent Rules (from CONTRIBUTING.md)
+
+### File Creation
+
+1. **No Root Rule** - Never create `.md` files in the repository root unless explicitly instructed.
+2. **Modify, Don't Fork** - Edit existing files; never create `FILE_v2.md` or `FILE_updated.md` duplicates.
+3. **Scratchpad Protocol** - All analysis and intermediate work goes in `docs/scratch/` with date prefix: `YYYY-MM-DD-<context>.md`
+4. **Consolidation First** - Before creating new docs, search for existing related docs and update them instead.
+
+### Protected Sections
+
+Never modify content between `PROTECTED` and `END PROTECTED` markers unless explicitly instructed by the user.
+
+### Naming Conventions
+
+| Type | Format | Example |
+| --- | --- | --- |
+| Root GitHub files | `UPPERCASE.md` | `README.md`, `CONTRIBUTING.md` |
+| Agent files | `UPPERCASE.md` | `CLAUDE.md`, `AGENTS.md` |
+| All other docs/ files | `lowercase-kebab.md` | `cli-reference.md` |
+| Scratch files | `YYYY-MM-DD-context.md` | `2026-01-06-debug-auth.md` |
 
 ## When to Suggest CLI vs API
 
@@ -196,39 +229,41 @@ All docs use lowercase-kebab naming in `docs/`:
 After creating a PR, you MUST monitor and address feedback:
 
 ### 1. Monitor CI Status
+
 ```bash
-# Check CI status (repeat until all pass)
 gh pr checks <PR_NUMBER>
 ```
 
-Wait for all checks to pass. If any fail, investigate and fix.
-
 ### 2. Check for Review Comments
+
 ```bash
-# Get review comments
 gh api repos/teng-lin/notebooklm-py/pulls/<PR_NUMBER>/comments \
   --jq '.[] | "File: \(.path):\(.line)\nComment: \(.body)\n---"'
 ```
 
 ### 3. Address Feedback
+
 For each review comment (especially from `gemini-code-assist`):
+
 1. Read and understand the feedback
 2. Make the suggested fix if it improves the code
 3. Commit with a descriptive message referencing the feedback
 4. Push and re-check CI
 5. **Reply to the review thread** confirming the fix:
+
    ```bash
    gh api repos/teng-lin/notebooklm-py/pulls/<PR>/comments/<COMMENT_ID>/replies \
      -f body="Addressed in commit <SHA>: <brief description>"
    ```
 
 ### 4. Verify Final State
+
 ```bash
-# Ensure PR is ready to merge
 gh pr view <PR_NUMBER> --json state,mergeStateStatus,mergeable
 ```
 
 **Important**: Do NOT consider a PR complete until:
+
 - All CI checks pass
 - All review comments are addressed
 - `mergeStateStatus` is `CLEAN`

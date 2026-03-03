@@ -156,7 +156,29 @@ def register_session_commands(cli):
         default=None,
         help="Where to save storage_state.json (default: $NOTEBOOKLM_HOME/storage_state.json)",
     )
-    def login(storage):
+    @click.option(
+        "--extension",
+        "extension_spec",
+        default=None,
+        metavar="ID_OR_PATH",
+        help=(
+            "Load a Chrome extension during login. "
+            "Pass a Chrome Web Store extension ID to auto-download and cache it "
+            "(e.g. callobklhcbilhphinckomhgkigmfocg), "
+            "or a path to an already-unpacked extension directory containing manifest.json."
+        ),
+    )
+    @click.option(
+        "--use-chrome-profile",
+        is_flag=True,
+        default=False,
+        help=(
+            "Use your real Chrome browser profile instead of Playwright's profile. "
+            "Chrome must be fully quit before running this. "
+            "Useful when extensions are already installed in your real browser."
+        ),
+    )
+    def login(storage, extension_spec, use_chrome_profile):
         """Log in to NotebookLM via browser.
 
         Opens a browser window for Google login. After logging in,
@@ -195,19 +217,63 @@ def register_session_commands(cli):
         storage_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         browser_profile.mkdir(parents=True, exist_ok=True, mode=0o700)
 
+        # Resolve extension directory if requested (before browser launch so errors surface early)
+        extension_dir = None
+        if extension_spec:
+            from ._extension import resolve_extension_dir
+
+            extension_dir = resolve_extension_dir(extension_spec)
+
+        # Choose user_data_dir: real Chrome profile or Playwright's own profile
+        if use_chrome_profile:
+            from ._extension import get_chrome_profile_path
+
+            chrome_profile = get_chrome_profile_path()
+            if chrome_profile is None:
+                console.print("[red]Error: Cannot determine Chrome profile path on this OS.[/red]")
+                raise SystemExit(1)
+            if not chrome_profile.exists():
+                console.print(
+                    f"[red]Error: Chrome profile not found at {chrome_profile}[/red]\n"
+                    "Make sure Google Chrome is installed."
+                )
+                raise SystemExit(1)
+            # Check for Chrome lock file (Chrome still running)
+            lock_file = chrome_profile.parent / "SingletonLock"
+            if lock_file.exists():
+                console.print(
+                    "[yellow]Warning: Chrome appears to be running (SingletonLock detected).[/yellow]\n"
+                    "Quit Chrome completely before using --use-chrome-profile to avoid conflicts."
+                )
+            # Playwright expects the User Data directory (parent of 'Default')
+            user_data_dir = str(chrome_profile.parent)
+            console.print(f"[dim]Using Chrome profile: {chrome_profile}[/dim]")
+        else:
+            user_data_dir = str(browser_profile)
+
+        # Build Playwright launch args
+        launch_args = [
+            "--disable-blink-features=AutomationControlled",
+            "--password-store=basic",  # Avoid macOS keychain encryption for headless compatibility
+        ]
+        if extension_dir:
+            launch_args += [
+                f"--load-extension={extension_dir}",
+                f"--disable-extensions-except={extension_dir}",
+            ]
+            console.print(f"[dim]Loading extension from: {extension_dir}[/dim]")
+
         console.print("[yellow]Opening browser for Google login...[/yellow]")
-        console.print(f"[dim]Using persistent profile: {browser_profile}[/dim]")
+        if not use_chrome_profile:
+            console.print(f"[dim]Using persistent profile: {browser_profile}[/dim]")
 
         # Use context manager to restore ProactorEventLoop for Playwright on Windows
         # (fixes #89: NotImplementedError on Windows Python 3.12)
         with _windows_playwright_event_loop(), sync_playwright() as p:
             context = p.chromium.launch_persistent_context(
-                user_data_dir=str(browser_profile),
+                user_data_dir=user_data_dir,
                 headless=False,
-                args=[
-                    "--disable-blink-features=AutomationControlled",
-                    "--password-store=basic",  # Avoid macOS keychain encryption for headless compatibility
-                ],
+                args=launch_args,
                 ignore_default_args=["--enable-automation"],
             )
 

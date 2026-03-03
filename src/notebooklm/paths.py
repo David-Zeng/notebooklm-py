@@ -82,6 +82,15 @@ def get_browser_profile_dir() -> Path:
     return get_home_dir() / "browser_profile"
 
 
+def get_extensions_dir() -> Path:
+    """Get directory where unpacked Chrome extensions are cached.
+
+    Returns:
+        Path to extensions/ within NOTEBOOKLM_HOME.
+    """
+    return get_home_dir() / "extensions"
+
+
 def get_config_path() -> Path:
     """Get config.json path.
 

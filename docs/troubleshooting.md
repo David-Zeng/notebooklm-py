@@ -69,6 +69,31 @@ Or re-run `notebooklm login` if session cookies are also expired.
 3. Complete any CAPTCHA or security challenges Google presents
 4. Ensure you're using a real mouse/keyboard (not pasting credentials via script)
 
+#### Company / Workspace account blocked — Endpoint Verification required
+
+**Cause:** Your corporate Google Workspace account requires the [Endpoint Verification](https://chromewebstore.google.com/detail/endpoint-verification/callobklhcbilhphinckomhgkigmfocg) Chrome extension to be active during sign-in. Without it, Google blocks the login.
+
+**Solution — auto-download the extension (recommended):**
+
+```bash
+notebooklm login --extension callobklhcbilhphinckomhgkigmfocg
+```
+
+The extension is downloaded from the Chrome Web Store, unpacked to `~/.notebooklm/extensions/callobklhcbilhphinckomhgkigmfocg/`, and loaded automatically. It is cached for future logins — the download only happens once.
+
+**Alternative — use your real Chrome profile (extension already installed):**
+
+```bash
+# Quit Chrome completely first, then:
+notebooklm login --use-chrome-profile
+```
+
+**Alternative — provide an already-unpacked extension directory:**
+
+```bash
+notebooklm login --extension /path/to/unpacked/endpoint-verification/
+```
+
 ### RPC Errors
 
 #### "RPCError: No result found for RPC ID: XyZ123"
